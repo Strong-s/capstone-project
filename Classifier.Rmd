@@ -1,0 +1,639 @@
+---
+title: "Classifier"
+output: html_notebook
+---
+
+```{r}
+#loading needed packages and functions
+library("tidyverse")
+library("lubridate")
+library("quanteda")
+library("corpustools")
+library("quanteda.textmodels")
+library("quanteda.classifiers")
+library("quanteda.textplots")
+library("quanteda.textstats")
+library("topicmodels")
+library("ldatuning")
+
+#function to clean tweets
+#part of funtion taken from: https://stackoverflow.com/questions/31348453/how-do-i-clean-twitter-data-in-r
+clean_tweets <- function(x) {
+                x %>%
+                    #remove URLs
+                    str_remove_all(" ?(f|ht)(tp)(s?)(://)(.*)[.|/](.*)") %>%
+                    #removing code for emojis
+                    str_remove_all("\\<U\\+[:digit:]{4}[:alpha:]{1}[:digit:]{1,3}[:alpha:]*[:digit:]?\\>") %>%
+                    str_remove_all("\\<U\\+[:alpha:]{1,3}[:digit:]{1,3}[:alpha:]*[:digit:]?\\>") %>%
+                    #changing code for & symbol to 'and'
+                    str_replace_all("&amp;", "and") %>%
+                    #removing retweet abbreviation
+                    str_remove_all("^RT:? ") %>%
+                    #removing punctuation
+                    str_remove_all("[[:punct:]]") %>%
+                    #remove mentions
+                    str_remove_all("@[[:alnum:]]+") %>%
+                    #replace newline characters with space
+                    str_replace_all("\\\n", " ") %>%
+                    #make everything lowercase
+                    str_to_lower() %>%
+                    #remove trailing whitespace
+                    str_trim("both") }
+```
+
+## Reading in the Data
+```{r}
+##handclassified tweets for training, also 
+##filtering out unlabled tweets in handclassification
+handclassification <- read.csv("data/Final datasets/handclass.csv") %>%
+  filter(classification != "NA")
+
+##peer classified data for validation 
+peerclass <- read.csv("data/Final datasets/Peer Classification.csv")
+
+##tweets for analysis
+analysis_tweets <- read.csv("data/Final datasets/analysis_tweets.csv")
+##formatting date column
+analysis_tweets$created_at <- ymd_hms(analysis_tweets$created_at)
+
+##breaking data into years for more managable analysis
+analysis_15 <- analysis_tweets %>%
+  filter(created_at >= "2015-01-01" & created_at < "2016-01-01")
+
+analysis_16 <- analysis_tweets %>%
+  filter(created_at >= "2016-01-01" & created_at < "2017-01-01")
+
+analysis_17 <- analysis_tweets %>%
+  filter(created_at >= "2017-01-01" & created_at < "2018-01-01")
+
+analysis_18 <- analysis_tweets %>%
+  filter(created_at >= "2018-01-01" & created_at < "2019-01-01")
+
+analysis_19 <- analysis_tweets %>%
+  filter(created_at >= "2019-01-01" & created_at < "2020-01-01")
+
+analysis_20 <- analysis_tweets %>%
+  filter(created_at >= "2020-01-01" & created_at < "2021-01-01")
+
+analysis_21 <- analysis_tweets %>%
+  filter(created_at >= "2021-01-01" & created_at < "2021-06-01")
+
+##Trump's tweets
+trumptweets <- read.csv("data/Final datasets/trump.csv")
+##reformating date column
+trumptweets$date <- mdy_hm(trumptweets$date)
+##filtering for only desired tweets
+trumptweets <- trumptweets %>%
+  filter(isRetweet == "f", isDeleted == "f", date >= "2015-01-01")
+
+```
+
+
+## Comparing Peer Hand Classification 
+```{r}
+##adding column which identifies classification discrepancies
+peerclass$discrepancy <- rep(NA, 500)
+for (i in 1: nrow(peerclass)){
+  sum <- sum(peerclass[i, 1:3])
+  ifelse(sum == 0, peerclass$discrepancy[i] <- "no", 
+         ifelse(sum == 3, peerclass$discrepancy[i] <- "no", 
+                ifelse(sum == -3, peerclass$discrepancy[i] <- "no", peerclass$discrepancy[i] <- "yes")))
+}
+
+##finding total number of discrepancies
+peerclass_count <- peerclass %>%
+  group_by(discrepancy) %>% 
+  summarise(count = n())
+
+##examining tweets with classification discrepancy
+peerclass %>%
+  filter(discrepancy == "yes")
+```
+
+
+## Dictionary Creation 
+```{r}
+##cleaning text of tweets
+handclassification$text <- handclassification$text %>%
+  clean_tweets
+
+##creating corpus
+handclass_corpus <- handclassification %>%
+  corpus(text_field = "text")
+
+##separating out civic and ethnic tweets and creating individual corpera
+civic_corpus <- corpus_subset(handclass_corpus, classification == 1)
+ethnic_corpus <- corpus_subset(handclass_corpus, classification == -1)
+
+##creating dfms
+civic_dfm <- civic_corpus %>%
+  tokens(remove_symbols = T) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  dfm()
+
+ethnic_dfm <- ethnic_corpus %>%
+  tokens(remove_symbols = T) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  dfm()
+
+#finding the most frequently used words
+textstat_frequency(civic_dfm)
+textstat_frequency(ethnic_dfm)
+
+#creating tcorpus for corpus compare
+thandclass <- create_tcorpus(handclass_corpus)
+thandclass$preprocess('token', 'feature', remove_stopwords = TRUE, remove_numbers = TRUE)
+
+##subsetting tcorpera into civic and ethnic
+civic <- thandclass$subset_meta(classification == 1, copy=TRUE)
+ethnic <- thandclass$subset_meta(classification == -1, copy=TRUE)
+
+##comparing frequency across corpera
+comp <- compare_corpus(civic, ethnic, 'feature')
+
+##converting to dataframe and arranging in decreasing order
+comp <- as.data.frame(comp)
+comp[order(comp$freq, decreasing = TRUE),]
+```
+
+```{r}
+##tuning to find correct number of topics for LDA
+civicldatune <- FindTopicsNumber(civic_dfm, topics = seq(2, 8, by = 1), metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"))
+FindTopicsNumber_plot(civicldatune)
+
+ethnicldatune <- FindTopicsNumber(ethnic_dfm, topics = seq(2, 8, by = 1), metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"))
+FindTopicsNumber_plot(ethnicldatune)
+
+##Topic modeling to find terms similar to already identified key words
+topicModel_civic <- LDA(civic_dfm, 5, method="Gibbs", control=list(iter = 100, seed = 1))
+topicModel_ethnic <- LDA(ethnic_dfm, 5, method="Gibbs", control=list(iter = 100, seed = 1))
+
+##examining terms
+terms(topicModel_civic, 20)
+terms(topicModel_ethnic, 20)
+
+##checking context of key words
+kwic(tokens(civic_corpus), pattern = phrase("national anthem"))
+
+##creating dictionary
+nationalism_dict <- dictionary(list(civicn = c("every american", "every citizen", "justice", "opportun*", "found*", "built", "constitut*", "monument*", "ideal*", "land of opportun*", "freedom of speech", "freedom of religion", "historical", "national anthem", "flag", "equal*", "right*", "individu* right*", " individualism", "toler*", "community", "equal access", "innoc*", "intern* relat*", "becom*", "american dream", "tradit*", "concentration camp", "detain*", "islamophobia", "democra*", "extrem*", "proud*", "leadership", "support*", "becam*", "vote*", "govern*", "racist", "attack", "true"), ethnicn = c("bring back", "make america", "great again", "lazy", "born", "birth", "born in america", "religion", "christian", "muslim", "muslim ban", "speak* spanish", "illeg* immigr*", "alien*", "job*", "buy american", "hire american", "american job*", "give job*", "reject global*", "ethno-nationalism", "america first", "americafirst", "citizens only", "deport", "boarder wall", "buildthewall", "detention center", "illeg*", "patriot*", "go back", "go home", "sent back", "war", "tarrif*", "american goods", "rebuild*", "unemploy*", "isnt american", "isnt an american", "steel", "heritag*")))
+```
+
+## Creating Training DFM
+```{r}
+##cleaning text of all tweets 
+handclassification$text <- handclassification$text %>%
+  clean_tweets
+
+##creating corpus
+handclass_corpus <- handclassification %>%
+  corpus(text_field = "text")
+
+##applying dictionary to corpus
+nationalism_dfm <- tokens_lookup(tokens(handclass_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+##preprocessing and creating dfm
+handclass_dfm <- handclass_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+#adding custom dictionary feature to dfm 
+new_dfm <- cbind(handclass_dfm, nationalism_dfm)
+```
+
+## Training Classifier
+```{r}
+##creating training labels for 80% of data 
+trainclass <- factor(c(docvars(handclass_corpus, "classification")[1:4000], rep(NA, 1000)))
+
+##training mlp model
+class_mlp <- textmodel_mlp(new_dfm, trainclass, epochs = 15, dropout = 0.9, optimizer = "adam", loss = 'categorical_crossentropy', metrics = 'categorical_accuracy', verbose = T)
+
+##predicitng on remaining 20%
+class_pred <- predict(class_mlp, newdata = new_dfm[4001:5000,], type = "class")
+
+##creating confusion matrix of prediction and actual 
+classTable <- table(class_pred, docvars(handclass_corpus, "classification")[4001:5000])
+
+##calculating F1 score by calculating individual F1 score for each class
+##class -1 
+##calculating tp,fp and fn from the confusion matrix to use in subsequent calculations
+tp_1 <- classTable[1,1]
+fp_1 <- classTable[1,2] + classTable[1,3]
+fn_1 <- classTable[1,1] + classTable[3,1]
+##calculating precision
+precision_1 <- tp_1 / (tp_1 + fp_1)
+##calculating recall
+recall_1 <- tp_1 / (tp_1 + fn_1)
+##calculating F1
+F1_1 <- ((precision_1 * recall_1) / (precision_1 + recall_1)) * 2
+
+##class 0 
+##calculating tp,tn,fp and fn from the confusion matrix to use in subsequent calculations
+tp0 <- classTable[2,2]
+fp0 <- classTable[2,1] + classTable[2,3]
+fn0 <- classTable[1,2] + classTable[3,2]
+##calculating precision
+precision0 <- tp0 / (tp0 + fp0)
+#calculating recall
+recall0 <- tp0 / (tp0 + fn0)
+##calculating F1
+F10 <- ((precision0 * recall0) / (precision0 + recall0)) * 2
+
+##class 1
+##calculating tp,tn,fp and fn from the confusion matrix to use in subsequent calculations
+tp1 <- classTable[3,3]
+fp1 <- classTable[3,1] + classTable[3,3]
+fn1 <- classTable[1,3] + classTable[2,3]
+##calculating precision
+precision1 <- tp1 / (tp1 + fp1)
+##calculating recall
+recall1 <- tp1 / (tp1 + fn1)
+##calculating F1
+F11 <- ((precision1 * recall1) / (precision1 + recall1)) * 2
+
+##calculating total F1 score 
+weightedF1 <- ((230 * F1_1) + (575 * F10) + (195 *F11)) /1000
+totalF1 <- ((F1_1) + (F10) + (F11)) /3
+
+print(paste("Weighted F1:", round(weightedF1, 3)))
+print(paste("F1:", round(totalF1, 3)))
+
+
+```
+**Weighted F1 score of 0.678 and F1 score of 0.572**
+
+## Using Cross Validation to Determine Dropout Rate
+```{r}
+# ##cross validation for dropout rates 
+# ##selecting dropout rates
+# dropouts <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+# ##creating 10 folds
+# folds <- sample(1:10, nrow(new_dfm), replace = TRUE)
+# ##runnign 10 fold cross validation
+# for (dropout in dropouts) {
+#   F1 <- numeric(10)
+#   for(j in 1:10){
+#     mod <- textmodel_mlp(new_dfm[folds != j,], trainclass[folds != j], epochs = 15, dropout = dropout, optimizer = "adam", loss = 'categorical_crossentropy', metrics = 'categorical_accuracy')
+#     pred <- predict(mod, newdata = new_dfm[folds == j,])
+#     table <- table(pred, trainclass[folds == j])
+#     tp_1 <- table[1,1]
+#     fp_1 <- table[1,2] + table[1,3]
+#     fn_1 <- table[1,1] + table[3,1]
+#     #calculating precision
+#     precision_1 <- tp_1 / (tp_1 + fp_1)
+#     #calculating recall
+#     recall_1 <- tp_1 / (tp_1 + fn_1)
+#     #calculating F1
+#     F1_1 <- ((precision_1 * recall_1) / (precision_1 + recall_1)) * 2
+#     tp0 <- table[2,2]
+#     fp0 <- table[2,1] + table[2,3]
+#     fn0 <- table[1,2] + table[3,2]
+#     #calculating precision
+#     precision0 <- tp0 / (tp0 + fp0)
+#     #calculating recall
+#     recall0 <- tp0 / (tp0 + fn0)
+#     #calculating F1
+#     F10 <- ((precision0 * recall0) / (precision0 + recall0)) * 2
+#     tp1 <- table[3,3]
+#     fp1 <- table[3,1] + table[3,3]
+#     fn1 <- table[1,3] + table[2,3]
+#     #calculating precision
+#     precision1 <- tp1 / (tp1 + fp1)
+#     #calculating recall
+#     recall1 <- tp1 / (tp1 + fn1)
+#     #calculating F1
+#     F11 <- ((precision1 * recall1) / (precision1 + recall1)) * 2
+#     F1[j] <- ((F1_1) + (F10) + (F11)) /3
+# 
+#   }
+#   error <- mean(F1)
+#   print(paste("dropout = ", dropout, " error: ", error, sep=""))
+#   }
+```
+[1] "dropout = 0 error: 0.578318318091708"
+[1] "dropout = 0.1 error: 0.578010318561037"
+[1] "dropout = 0.2 error: 0.575203004731373"
+[1] "dropout = 0.3 error: 0.577441330243204"
+[1] "dropout = 0.4 error: 0.581094273428884"
+[1] "dropout = 0.5 error: 0.582883586427604"
+[1] "dropout = 0.6 error: 0.576650798020795"
+[1] "dropout = 0.7 error: 0.581457034737283"
+[1] "dropout = 0.8 error: 0.585626024180421"
+[1] "dropout = 0.9 error: 0.596137734795837
+
+## Creating Classifer
+```{r}
+trainclass <- factor(c(docvars(handclass_corpus, "classification")[1:5000]))
+
+#running mlp model and predicting 
+class_mlp <- textmodel_mlp(new_dfm, trainclass, epochs = 15, dropout = 0.9, optimizer = "adam", loss = 'categorical_crossentropy', metrics = 'categorical_accuracy', verbose = T)
+```
+
+
+## Classifying Analysis Tweets
+```{r warning=F, message=F}
+##predictions for 2015
+##cleaning text of tweets
+analysis_15$text <- analysis_15$text %>%
+  clean_tweets
+
+##creating corpus
+analysis_corpus <- analysis_15 %>%
+  corpus(text_field = "text")
+
+##applying dictionary
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+##preprocessing and creating dfm
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+##combining dfm with custom dictionary feature
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+##using classifier to predict tweets
+analysis_pred_15 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+
+##turning into dataframe and formmating date column
+classification_predictions_15 <- data.frame(analysis_pred_15)
+colnames(classification_predictions_15) <- "Classification"
+classification_predictions_15$created_at <- analysis_15$created_at
+classification_predictions_15$created_at <- strftime(classification_predictions_15$created_at, "%Y-%m")
+
+##finding the counts of civic and ethnic tweets per month
+counts_15 <- classification_predictions_15 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_15, "data/Final datasets\\counts_15.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2016
+analysis_16$text <- analysis_16$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_16 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_16 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_16 <- data.frame(analysis_pred_16)
+colnames(classification_predictions_16) <- "Classification"
+classification_predictions_16$created_at <- analysis_16$created_at
+classification_predictions_16$created_at <- strftime(classification_predictions_16$created_at, "%Y-%m")
+
+counts_16 <- classification_predictions_16 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_16, "data/Final datasets\\counts_16.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2017
+analysis_17$text <- analysis_17$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_17 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_17 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_17 <- data.frame(analysis_pred_17)
+colnames(classification_predictions_17) <- "Classification"
+classification_predictions_17$created_at <- analysis_17$created_at
+classification_predictions_17$created_at <- strftime(classification_predictions_17$created_at, "%Y-%m")
+
+counts_17 <- classification_predictions_17 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_17, "data/Final datasets\\counts_17.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2018
+analysis_18$text <- analysis_18$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_18 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_18 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_18 <- data.frame(analysis_pred_18)
+colnames(classification_predictions_18) <- "Classification"
+classification_predictions_18$created_at <- analysis_18$created_at
+classification_predictions_18$created_at <- strftime(classification_predictions_18$created_at, "%Y-%m")
+
+counts_18 <- classification_predictions_18 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_18, "data/Final datasets\\counts_18.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2019
+analysis_19$text <- analysis_19$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_19 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_19 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_19 <- data.frame(analysis_pred_19)
+colnames(classification_predictions_19) <- "Classification"
+classification_predictions_19$created_at <- analysis_19$created_at
+classification_predictions_19$created_at <- strftime(classification_predictions_19$created_at, "%Y-%m")
+
+counts_19 <- classification_predictions_19 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_19, "data/Final datasets\\counts_19.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2020
+analysis_20$text <- analysis_20$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_20 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_20 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_20 <- data.frame(analysis_pred_20)
+colnames(classification_predictions_20) <- "Classification"
+classification_predictions_20$created_at <- analysis_20$created_at
+classification_predictions_20$created_at <- strftime(classification_predictions_20$created_at, "%Y-%m")
+
+counts_20 <- classification_predictions_20 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_20, "data/Final datasets\\counts_20.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##predictions for 2021
+analysis_21$text <- analysis_21$text %>%
+  clean_tweets
+
+analysis_corpus <- analysis_21 %>%
+  corpus(text_field = "text")
+
+analysis_nationalism_dfm <- tokens_lookup(tokens(analysis_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+analysis_dfm <- analysis_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm() %>% dfm_trim(min_termfreq = 15)
+
+new_analysis_dfm <- cbind(analysis_dfm, analysis_nationalism_dfm) 
+
+analysis_pred_21 <- predict(class_mlp, newdata = new_analysis_dfm, force = TRUE)
+classification_predictions_21 <- data.frame(analysis_pred_21)
+colnames(classification_predictions_21) <- "Classification"
+classification_predictions_21$created_at <- analysis_21$created_at
+classification_predictions_21$created_at <- strftime(classification_predictions_21$created_at, "%Y-%m")
+
+counts_21 <- classification_predictions_21 %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>% 
+  summarise(count = n())
+
+#write.csv(counts_21, "data/Final datasets\\counts_21.csv", row.names = F)
+```
+
+```{r warning=F, message=F}
+##Calculating yearly counts  
+full_counts <- rbind(counts_15, counts_16, counts_17, counts_18, counts_19, counts_20, counts_21)
+full_counts$year <- floor_date(ym(full_counts$created_at), unit = "year")
+full_counts <- full_counts %>%
+  group_by(year, Classification) %>% 
+  summarise(ycount = sum(count))
+
+#write.csv(full_counts, "data/Final datasets\\full_count.csv", row.names = F)
+```
+
+
+## Classifying Trump's Tweets
+```{r}
+#cleaning text of Trump's tweets
+trumptweets$text <- trumptweets$text %>%
+  clean_tweets
+
+trump_corpus <- trumptweets %>%
+  corpus(text_field = "text")
+
+trump_nationalism_dfm <- tokens_lookup(tokens(trump_corpus), dictionary = nationalism_dict, valuetype = "glob") %>%
+  dfm()
+
+trump_dfm <- trump_corpus %>%
+  tokens(remove_symbols = TRUE, remove_numbers = TRUE) %>%
+  tokens_remove(c(stopwords("en"), "u", "u_u", "https", "c")) %>%
+  tokens_wordstem() %>%
+  tokens_ngrams(1:2) %>%
+  dfm()
+
+new_trump_dfm <- cbind(trump_dfm, trump_nationalism_dfm)
+
+trump_pred <- predict(class_mlp, newdata = new_trump_dfm, force = TRUE)
+classification_predictions_trump <- data.frame(trump_pred)
+colnames(classification_predictions_trump) <- "Classification"
+classification_predictions_trump$created_at <- trumptweets$date
+classification_predictions_trump$created_at <- strftime(classification_predictions_trump$created_at, "%Y-%m")
+
+counts_trump <- classification_predictions_trump %>%
+  filter(Classification != 0) %>%
+  group_by(created_at, Classification) %>%
+  summarise(count = n())
+#write.csv(counts_trump, "data/Final datasets\\counts_trump.csv", row.names = F)
+
+##calculating yearly counts
+counts_trump$year <- floor_date(ym(counts_trump$created_at), unit = "year")
+full_trump <- counts_trump %>%
+  group_by(year, Classification) %>% 
+  summarise(ycount = sum(count))
+#write.csv(full_trump, "data/Final datasets\\full_trump.csv", row.names = F)
+```
+
+

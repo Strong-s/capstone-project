@@ -1,0 +1,290 @@
+---
+title: "Data Collection"
+output: html_document
+---
+
+```{r}
+#Reading in required packages and functions 
+library("pdftools")
+library("academictwitteR")
+library("tidyverse")
+library("quanteda")
+
+#function to clean scraped data
+clean_dataframe <- function(df) {
+                      #extracting latitude and longitude coordinates 
+                      df$coordinates <- df$geo$coordinates$coordinates %>%
+                                        str_remove_all("[c()]")  
+                      df <- df %>%
+                            separate(coordinates, c("lat", "lng"), ", ")
+                      #formatting
+                      df$lat <- as.numeric(df$lat)
+                      df$lng <- as.numeric(df$lng)
+                      #extracting number of retweets for each tweet 
+                      df$retweets <- df$public_metrics$retweet_count
+                      #extracting number of replied for each tweet
+                      df$replies <- df$public_metrics$reply_count
+                      #extracting number of likes for each tweet
+                      df$likes <- df$public_metrics$like_count
+                      
+                      #reducting the df by deleting duplicates, taking a random sample of 20% of tweets 
+                      #and keeping only desired columns
+                      reduced_df <- slice_sample(reduced_df, prop = .2, replace = F) %>%
+                      select(c("text", "created_at", "id", "lat", "lng", "retweets", "replies", "likes"))
+                      return(reduced_df)
+                    }
+```
+
+## Data Selection 
+```{r}
+##reading literature into R from pdfs
+origins <- pdf_text("Readings/The origins and nature of American nationalism.pdf")
+##getting rid of blank title page
+origins <- origins[2:length(origins)]
+##removing symbols for returns in the text
+origins <- str_replace_all(origins, "[\r\n]" , "")
+
+paradoxes <- pdf_text("Readings/The Paradoxes of American Nationalism.pdf")
+paradoxes <- paradoxes[2:length(paradoxes)]
+paradoxes <- str_replace_all(paradoxes, "[\r\n]" , "")
+
+varieties <- pdf_text("Readings/Varieties of American Popular Nationalism.pdf")
+varieties <- str_replace_all(varieties, "[\r\n]" , "")
+
+dimension <- pdf_text("Readings/Ethnic and Civic Nationalism_ Towards a New Dimension.pdf")
+dimension <- origins[2:length(dimension)]
+dimension <- str_replace_all(dimension, "[\r\n]" , "")
+```
+
+```{r}
+#turning literature into dfm and finding the key words
+origins_dfm <- origins %>% 
+  corpus() %>%
+  tokens(remove_numbers = TRUE, remove_symbols = TRUE, remove_punct = TRUE) %>%
+  tokens_remove(stopwords('en')) %>%
+  dfm()
+
+paradoxes_dfm <- paradoxes %>% 
+  corpus() %>%
+  tokens(remove_numbers = TRUE, remove_symbols = TRUE, remove_punct = TRUE) %>%
+  tokens_remove(stopwords('en')) %>%
+  dfm()
+
+varieties_dfm <- varieties %>% 
+  corpus() %>%
+  tokens(remove_numbers = TRUE, remove_symbols = TRUE, remove_punct = TRUE) %>%
+  tokens_remove(stopwords('en')) %>%
+  dfm()
+
+dimension_dfm <- dimension %>% 
+  corpus() %>%
+  tokens(remove_numbers = TRUE, remove_symbols = TRUE, remove_punct = TRUE) %>%
+  tokens_remove(stopwords('en')) %>%
+  dfm()
+
+textstat_frequency(origins_dfm)
+textstat_frequency(paradoxes_dfm)
+textstat_frequency(varieties_dfm)
+textstat_frequency(dimension_dfm)
+```
+
+**key words found: nation* america* united states**
+
+## Data Collection
+```{r}
+##scraping twitter three months at a time 
+#loading in bearer token
+load("bearer.rda")
+
+##building query with key words and search parameters
+query <- build_query("(American nationalism) OR (American national) OR (American citizenship) OR (American citizen)", is_retweet = FALSE, country = "US", lang = "en")
+
+##scrapping twitter using query and given time frame
+# tweets_2021_AM <- get_all_tweets(
+#     query = query,
+#     start_tweets = "2021-04-01T00:00:00Z",
+#     end_tweets = "2021-05-21T00:00:00Z",
+#     bearer_token,
+#     file = "tweets_2021_AM",
+#     data_path = "data/2021/AM/",
+#     bind_tweets = FALSE)
+
+##code to reread the full, uncleaned datasets and the cleaned datasets if needed 
+# tweets_2015_JFM <- readRDS("tweets_2015_JFM.rds")
+# tweets_2015_AMJ <- readRDS("tweets_2015_AMJ.rds")
+# tweets_2015_JAS <- readRDS("tweets_2015_JAS.rds")
+# tweets_2015_OND <- readRDS("tweets_2015_OND.rds")
+# tweets_2016_JFM <- readRDS("tweets_2016_JFM.rds")
+# tweets_2016_AMJ <- readRDS("tweets_2016_AMJ.rds")
+# tweets_2016_JAS <- readRDS("tweets_2016_JAS.rds")
+# tweets_2016_OND <- readRDS("tweets_2016_OND.rds")
+# tweets_2017_JFM <- readRDS("tweets_2017_JFM.rds")
+# tweets_2017_JAS <- bind_tweet_jsons("data/2017/JAS/")
+# tweets_2017_april <- readRDS("tweets_2017_april.rds")
+# tweets_2017_may <- readRDS("tweets_2017_may.rds")
+# tweets_2017_june <- bind_tweet_jsons("data/2017/june")
+# tweets_2017_OND <- bind_tweet_jsons("data/2017/OND/")
+# tweets_2018_JFM <- bind_tweet_jsons("data/2018/")
+# tweets_2018_AMJ <- bind_tweet_jsons("data/2018/AMJ/")
+# tweets_2018_JAS <- bind_tweet_jsons("data/2018/JAS/")
+# tweets_2018_OND <- bind_tweet_jsons("data/2018/OND/")
+# tweets_2019_JFM <- bind_tweet_jsons("data/2019/")
+# tweets_2019_AMJ <- bind_tweet_jsons("data/2019/AMJ/")
+# tweets_2019_JAS <- bind_tweet_jsons("data/2019/JAS/")
+# tweets_2019_OND <- bind_tweet_jsons("data/2019/OND/")
+# tweets_2020_JFM <- bind_tweet_jsons("data/2020/")
+# tweets_2020_AMJ <- bind_tweet_jsons("data/2020/AMJ/")
+# tweets_2020_JAS <- bind_tweet_jsons("data/2020/JAS/")
+# tweets_2020_OND <- bind_tweet_jsons("data/2020/OND/")
+# tweets_2021_JFM <- bind_tweet_jsons("data/2021/JFM")
+# tweets_2021_AM <- bind_tweet_jsons("data/2021/AM")
+# JFM2015 <- read.csv("data/Final datasets/tweets_2015JFM.csv")
+# AMJ2015 <- read.csv("data/Final datasets/tweets_2015AMJ.csv")
+# JAS2015 <- read.csv("data/Final datasets/tweets_2015JAS.csv")
+# OND2015 <- read.csv("data/Final datasets/tweets_2015OND.csv")
+# JFM2016 <- read.csv("data/Final datasets/tweets_2016JFM.csv")
+# AMJ2016 <- read.csv("data/Final datasets/tweets_2016AMJ.csv")
+# JAS2016 <- read.csv("data/Final datasets/tweets_2016JAS.csv")
+# OND2016 <- read.csv("data/Final datasets/tweets_2016OND.csv")
+# JFM2017 <- read.csv("data/Final datasets/tweets_2017JFM.csv")
+# AMJ2017 <- read.csv("data/Final datasets/tweets_2017AMJ.csv")
+# JAS2017 <- read.csv("data/Final datasets/tweets_2017JAS.csv")
+# OND2017 <- read.csv("data/Final datasets/tweets_2017OND.csv")
+# JFM2018 <- read.csv("data/Final datasets/tweets_2018JFM.csv")
+# AMJ2018 <- read.csv("data/Final datasets/tweets_2018AMJ.csv")
+# JAS2018 <- read.csv("data/Final datasets/tweets_2018JAS.csv")
+# OND2018 <- read.csv("data/Final datasets/tweets_2018OND.csv")
+# JFM2019 <- read.csv("data/Final datasets/tweets_2019JFM.csv")
+# AMJ2019 <- read.csv("data/Final datasets/tweets_2019AMJ.csv")
+# JAS2019 <- read.csv("data/Final datasets/tweets_2019JAS.csv")
+# OND2019 <- read.csv("data/Final datasets/tweets_2019OND.csv")
+# JFM2020 <- read.csv("data/Final datasets/tweets_2020JFM.csv")
+# AMJ2020 <- read.csv("data/Final datasets/tweets_2020AMJ.csv")
+# JAS2020 <- read.csv("data/Final datasets/tweets_2020JAS.csv")
+# OND2020 <- read.csv("data/Final datasets/tweets_2020OND.csv")
+# JFM2021 <- read.csv("data/Final datasets/tweets_2021JFM.csv")
+# AM2021 <- read.csv("data/Final datasets/tweets_2021AM.csv")
+```
+
+## Data Formatting
+```{r}
+#cleaning the scraped dataframes as they were scraped and then saving thme as csv files to be accessed later
+
+##2015
+##cleaning data
+tweets_2015_JFM_reduced <- clean_dataframe(tweets_2015_JFM)
+##creating csv file
+#write.csv(tweets_2015_JFM_reduced, "data/Final datasets\\tweets_2015JFM.csv", row.names = F)
+
+tweets_2015_AMJ_reduced <- clean_dataframe(tweets_2015_AMJ)
+#write.csv(tweets_2015_AMJ_reduced, "data/Final datasets\\tweets_2015AMJ.csv", row.names = F)
+
+tweets_2015_JAS_reduced <- clean_dataframe(tweets_2015_JAS)
+#write.csv(tweets_2015_JAS_reduced, "data/Final datasets\\tweets_2015JAS.csv", row.names = F)
+
+tweets_2015_OND_reduced <- clean_dataframe(tweets_2015_OND)
+
+#write.csv(tweets_2015_OND_reduced, "data/Final datasets\\tweets_2015OND.csv", row.names = F)
+tweets_2015 <- rbind(tweets_2015_AMJ_reduced, tweets_2015_JAS_reduced, tweets_2015_JFM_reduced, tweets_2015_OND_reduced)
+
+##2016
+tweets_2016_JFM_reduced <- clean_dataframe(tweets_2016_JFM)
+#write.csv(tweets_2016_JFM_reduced, "data/Final datasets\\tweets_2016JFM.csv", row.names = F)
+
+tweets_2016_AMJ_reduced <- clean_dataframe(tweets_2016_AMJ)
+#write.csv(tweets_2016_AMJ_reduced, "data/Final datasets\\tweets_2016AMJ.csv", row.names = F)
+
+tweets_2016_JAS_reduced <- clean_dataframe(tweets_2016_JAS)
+#write.csv(tweets_2016_JAS_reduced, "data/Final datasets\\tweets_2016JAS.csv", row.names = F)
+
+tweets_2016_OND_reduced <- clean_dataframe(tweets_2016_OND)
+#write.csv(tweets_2016_OND_reduced, "data/Final datasets\\tweets_2016OND.csv", row.names = F)
+
+tweets_2016 <- rbind(tweets_2016_AMJ_reduced, tweets_2016_JAS_reduced, tweets_2016_JFM_reduced, tweets_2015_OND_reduced)
+
+##2017
+tweets_2017_JFM_reduced <- clean_dataframe(tweets_2017_JFM)
+#write.csv(tweets_2017_JFM_reduced, "data/Final datasets\\tweets_2017JFM.csv", row.names = F)
+
+tweets_2017_april_reduced <- clean_dataframe(tweets_2017_april)
+tweets_2017_may_reduced <- clean_dataframe(tweets_2017_may)
+tweets_2017_june_reduced <- clean_dataframe(tweets_2017_june)
+tweets_2017_AMJ_reduced <- rbind(tweets_2017_april_reduced, tweets_2017_may_reduced, tweets_2017_june_reduced)
+#write.csv(tweets_2017_AMJ_reduced, "data/Final datasets\\tweets_2017AMJ.csv", row.names = F)
+
+tweets_2017_JAS_reduced <- clean_dataframe(tweets_2017_JAS)
+#write.csv(tweets_2017_JAS_reduced, "data/Final datasets\\tweets_2017JAS.csv", row.names = F)
+
+tweets_2017_OND_reduced <- clean_dataframe(tweets_2017_OND)
+#write.csv(tweets_2017_OND_reduced, "data/Final datasets\\tweets_2017OND.csv", row.names = F)
+
+##2018
+tweets_2018_JFM_reduced <- clean_dataframe(tweets_2018_JFM)
+#write.csv(tweets_2018_JFM_reduced, "data/Final datasets\\tweets_2018JFM.csv", row.names = F)
+
+tweets_2018_AMJ_reduced <- clean_dataframe(tweets_2018_AMJ)
+#write.csv(tweets_2018_AMJ_reduced, "data/Final datasets\\tweets_2018AMJ.csv", row.names = F)
+
+tweets_2018_JAS_reduced <- clean_dataframe(tweets_2018_JAS)
+#write.csv(tweets_2018_JAS_reduced, "data/Final datasets\\tweets_2018JAS.csv", row.names = F)
+
+tweets_2018_OND_reduced <- clean_dataframe(tweets_2018_OND)
+#write.csv(tweets_2018_OND_reduced, "data/Final datasets\\tweets_2018OND.csv", row.names = F)
+
+##2019
+tweets_2019_JFM_reduced <- clean_dataframe(tweets_2019_JFM)
+#write.csv(tweets_2019_JFM_reduced, "data/Final datasets\\tweets_2019JFM.csv", row.names = F)
+
+tweets_2019_AMJ_reduced <- clean_dataframe(tweets_2019_AMJ)
+#write.csv(tweets_2019_AMJ_reduced, "data/Final datasets\\tweets_2019AMJ.csv", row.names = F)
+
+tweets_2019_JAS_reduced <- clean_dataframe(tweets_2019_JAS)
+#write.csv(tweets_2019_JAS_reduced, "data/Final datasets\\tweets_2019JAS.csv", row.names = F)
+
+tweets_2019_OND_reduced <- clean_dataframe(tweets_2019_OND)
+#write.csv(tweets_2019_OND_reduced, "data/Final datasets\\tweets_2019OND.csv", row.names = F)
+
+##2020
+tweets_2020_JFM_reduced <- clean_dataframe(tweets_2020_JFM)
+#write.csv(tweets_2020_JFM_reduced, "data/Final datasets\\tweets_2020JFM.csv", row.names = F)
+
+tweets_2020_AMJ_reduced <- clean_dataframe(tweets_2020_AMJ)
+#write.csv(tweets_2020_AMJ_reduced, "data/Final datasets\\tweets_2020AMJ.csv", row.names = F)
+
+tweets_2020_JAS_reduced <- clean_dataframe(tweets_2020_JAS)
+#write.csv(tweets_2020_JAS_reduced, "data/Final datasets\\tweets_2020JAS.csv", row.names = F)
+
+tweets_2020_OND_reduced <- clean_dataframe(tweets_2020_OND)
+#write.csv(tweets_2020_OND_reduced, "data/Final datasets\\tweets_2020OND.csv", row.names = F)
+
+##2021
+tweets_2021_JFM_reduced <- clean_dataframe(tweets_2021_JFM)
+#write.csv(tweets_2021_JFM_reduced, "data/Final datasets\\tweets_2021JFM.csv", row.names = F)
+
+tweets_2021_AM_reduced <- clean_dataframe(tweets_2021_AM)
+#write.csv(tweets_2021_AM_reduced, "data/Final datasets\\tweets_2021AM.csv", row.names = F)
+```
+
+## Creating final dataframes for scraped twitter data
+```{r}
+##combining all data into one large dataframe
+full_tweets <- rbind(JFM2015, AMJ2015, JAS2015, OND2015, JFM2016, AMJ2016, JAS2016, OND2016, JFM2017, AMJ2017, JAS2017, OND2017, JFM2018, AMJ2018, JAS2018, OND2018, JFM2019, AMJ2019, JAS2019, OND2019, JFM2020, AMJ2020, JAS2020, OND2020, JFM2021, AM2021)
+
+##separating out 20% of total data for dictionary creation 
+dictionaryindex <- sample(nrow(full_tweets),nrow(full_tweets)*0.2)
+#write.csv(dict_tweets, "data/Final datasets\\dict_tweets.csv", row.names = F)
+
+##creating two separate dataframes - one for hand classification for the dictionary/training and one for analysis 
+dict_tweets <- full_tweets[dictionaryindex,]
+
+##removing duplicate tweets for handclassification 
+handclass <- dict_tweets[!duplicated(dict_tweets$text), ]
+#write.csv(handclass, "data/Final datasets\\handclass.csv", row.names = F)
+
+#saving remaining tweets as analysis tweets
+analysis_tweets <- full_tweets[-dictionaryindex,]
+#write.csv(analysis_tweets, "data/Final datasets\\analysis_tweets.csv", row.names = F)
+```
+
+
+

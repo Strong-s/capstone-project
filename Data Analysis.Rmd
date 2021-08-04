@@ -1,0 +1,251 @@
+---
+title: "Data Analysis"
+output: html_document
+---
+
+```{r}
+#reading in required packages and functions
+library("tidyverse")
+library("lubridate")
+```
+
+## Reading in all data
+```{r}
+##reading in American counts per month and
+##reformatting classification column
+counts_15 <- read.csv("data/Final datasets\\counts_15.csv")
+counts_15$Classification <- as.character(counts_15$Classification)
+
+counts_16 <- read.csv("data/Final datasets\\counts_16.csv")
+counts_16$Classification <- as.character(counts_16$Classification)
+
+counts_17 <- read.csv("data/Final datasets\\counts_17.csv")
+counts_17$Classification <- as.character(counts_17$Classification)
+
+counts_18 <- read.csv("data/Final datasets\\counts_18.csv")
+counts_18$Classification <- as.character(counts_18$Classification)
+
+counts_19 <- read.csv("data/Final datasets\\counts_19.csv")
+counts_19$Classification <- as.character(counts_19$Classification)
+
+counts_20 <- read.csv("data/Final datasets\\counts_20.csv")
+counts_20$Classification <- as.character(counts_20$Classification)
+
+counts_21 <- read.csv("data/Final datasets\\counts_21.csv")
+counts_21$Classification <- as.character(counts_21$Classification)
+
+##reading in American counts per year
+full_counts <- read.csv("data/Final datasets\\full_count.csv")
+full_counts$Classification <- as.character(full_counts$Classification)
+
+##reading in Trump counts and reformatting classification column
+##then separating by year
+counts_trump <- read.csv("data/Final datasets\\counts_trump.csv")
+counts_trump$Classification <- as.character(counts_trump$Classification)
+
+trump_15 <- counts_trump %>%
+  filter(created_at >= "2015-01" & created_at < "2016-01")
+
+trump_16 <- counts_trump %>%
+  filter(created_at >= "2016-01" & created_at < "2017-01")
+
+trump_17 <- counts_trump %>%
+  filter(created_at >= "2017-01" & created_at < "2018-01")
+
+trump_18 <- counts_trump %>%
+  filter(created_at >= "2018-01" & created_at < "2019-01")
+
+trump_19 <- counts_trump %>%
+  filter(created_at >= "2019-01" & created_at < "2020-01")
+
+trump_20 <- counts_trump %>%
+  filter(created_at >= "2020-01" & created_at < "2021-01")
+
+##reading in trump counts per year
+full_trump <- read.csv("data/Final datasets\\full_trump.csv")
+full_trump$Classification <- as.character(full_trump$Classification)
+```
+
+
+## Graphing change in American Nationalism Tweets Over Time
+```{r warning=F, message=F}
+##counts for 2015
+ggplot(counts_15, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2015-01", "2015-04", "2015-07", "2015-10"), labels = c("Jan 2015", "Apr 2015", "Jul 2015", "Oct 2015")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2015") + theme_classic() + 
+  geom_vline(xintercept = "2015-06") + geom_text(aes(x = "2015-06", y = 300, label = "Trump's Run for Presidancy Announced\n"), color = "black", angle = 90) 
+
+#ggsave("counts_15.jpeg")
+
+##counts for 2016
+ggplot(counts_16, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2016-01", "2016-04", "2016-07", "2016-10"), labels = c("Jan 2016", "Apr 2016", "Jul 2016", "Oct 2016")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2016") + theme_classic() + 
+  geom_vline(xintercept = "2016-11") + geom_text(aes(x = "2016-11", y = 2000, label = "Election Day\n"), color = "black", angle = 90)
+
+#ggsave("counts_16.jpeg")
+
+##counts for 2017
+ggplot(counts_17, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2017-01", "2017-04", "2017-07", "2017-10"), labels = c("Jan 2017", "Apr 2017", "Jul 2017", "Oct 2017")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2017") + theme_classic() + 
+  geom_vline(xintercept = "2017-01") + geom_text(aes(x = "2017-01", y = 3000, label = "Trump Inaugurated\n"), color = "black", angle = 90) 
+
+#ggsave("counts_17.jpeg")
+
+##counts for 2018
+ggplot(counts_18, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2018-01", "2018-04", "2018-07", "2018-10"), labels = c("Jan 2018", "Apr 2018", "Jul 2018", "Oct 2018")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2018") + theme_classic() 
+
+#ggsave("counts_18.jpeg")
+
+##counts for 2019
+ggplot(counts_19, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2019-01", "2019-04", "2019-07", "2019-10"), labels = c("Jan 2019", "Apr 2019", "Jul 2019", "Oct 2019")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2019") + theme_classic() +
+  geom_vline(xintercept = "2019-06") + geom_text(aes(x = "2019-06", y = 10000, label = "Reelection Campaign Starts\n"), color = "black", angle = 90) 
+
+#ggsave("counts_19.jpeg")
+
+##counts for 2020
+ggplot(counts_20, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2020-01", "2020-04", "2020-07", "2020-10"), labels = c("Jan 2020", "Apr 2020", "Jul 2020", "Oct 2020")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2020") + theme_classic() +
+  geom_vline(xintercept = "2020-11") + geom_text(aes(x = "2020-11", y = 925, label = "Election Day\n"), color = "black", angle = 90) 
+
+#ggsave("counts_20.jpeg")
+
+##counts for 2021
+ggplot(counts_21, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2021-01", "2021-04", "2021-06"), labels = c("Jan 2021", "Apr 2021", "Jun 2021")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets in 2021") + theme_classic() +
+  geom_vline(xintercept = "2021-01") + geom_text(aes(x = "2021-01", y = 4900, label = "Biden inaugurated\n"), color = "black", angle = 90) +
+  geom_vline(xintercept = "2021-01") + geom_text(aes(x = "2021-01", y = 2500, label = "Trump's Twitter Banned &\n"), color = "black", angle = 90)
+
+#ggsave("counts_21.jpeg")
+
+##counts across all six years
+ggplot(full_counts, aes(x = year, y = ycount, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2015-01-01", "2017-01-01", "2019-01-01", "2021-01-01"), labels = c("2015", "2017", "2019", "2021")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Nationalism Tweets Across Six Years") + theme_classic() 
+
+#ggsave("fullcounts.png")
+```
+
+## Graphing change in Trump Nationalism Tweets Over Time
+```{r}
+##counts for 2015
+ggplot(trump_15, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2015-01", "2015-04", "2015-07", "2015-10"), labels = c("Jan 2015", "Apr 2015", "Jul 2015", "Oct 2015")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2015") + theme_classic()  + 
+  geom_vline(xintercept = "2015-06") + geom_text(aes(x = "2015-06", y = 40, label = "Trump's Run for Presidancy Announced\n"), color = "black", angle = 90)
+
+#ggsave("trump_15.jpeg")
+
+##counts for 2016
+ggplot(trump_16, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2016-01", "2016-04", "2016-07", "2016-10"), labels = c("Jan 2016", "Apr 2016", "Jul 2016", "Oct 2016")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2016") + theme_classic() + 
+  geom_vline(xintercept = "2016-11") + geom_text(aes(x = "2016-11", y = 25, label = "Election Day\n"), color = "black", angle = 90)
+
+#ggsave("trump_16.jpeg")
+
+##counts for 2017
+ggplot(trump_17, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2017-01", "2017-04", "2017-07", "2017-10"), labels = c("Jan 2017", "Apr 2017", "Jul 2017", "Oct 2017")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2017") + theme_classic()  + 
+  geom_vline(xintercept = "2017-01") + geom_text(aes(x = "2017-01", y = 13, label = "Trump Inaugurated\n"), color = "black", angle = 90)
+
+#ggsave("trump_17.jpeg")
+
+##counts for 2018
+ggplot(trump_18, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2018-01", "2018-04", "2018-07", "2018-10"), labels = c("Jan 2018", "Apr 2018", "Jul 2018", "Oct 2018")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2018") + theme_classic()
+
+#ggsave("trump_18.jpeg")
+
+##counts for 2019
+ggplot(trump_19, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2019-01", "2019-04", "2019-07", "2019-10"), labels = c("Jan 2019", "Apr 2019", "Jul 2019", "Oct 2019")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2019") + theme_classic() +
+  geom_vline(xintercept = "2019-06") + geom_text(aes(x = "2019-06", y = 25, label = "Reelection Campaign Starts\n"), color = "black", angle = 90)
+
+#ggsave("trump_19.jpeg")
+
+##counts for 2020
+ggplot(trump_20, aes(x = created_at, y = count, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2020-01", "2020-04", "2020-07", "2020-10"), labels = c("Jan 2020", "Apr 2020", "Jul 2020", "Oct 2020")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Change in Number of Donald Trump's Nationalism Tweets in 2020") + theme_classic() +
+  geom_vline(xintercept = "2020-11") + geom_text(aes(x = "2020-11", y = 45, label = "Election Day\n"), color = "black", angle = 90) 
+
+#ggsave("trump_20.jpeg")
+
+##counts across all six years
+ggplot(full_trump, aes(x = year, y = ycount, group = Classification)) + 
+  geom_line(aes(color = Classification), size = 1) + 
+  scale_x_discrete(breaks = c("2015-01-01", "2017-01-01", "2019-01-01", "2021-01-01"), labels = c("2015", "2017", "2019", "2021")) + 
+  scale_color_manual(name = "Type of Nationalism", labels = c("Ethnic", "Civic"), values = c("goldenrod1", "slateblue3")) + 
+  labs(x = "Date", y = "Count of Tweets", title = "Donald Trump's Use of Nationalism in Tweets Across Six Years") + theme_classic()
+
+#ggsave("full_trump.jpeg")
+```
+
+## Determining the number of each type of classifcation 
+```{r}
+##American Tweets
+##ethnic count
+full_counts %>%
+  filter(Classification == -1) %>%
+  summarise(sum(ycount))
+##civic count
+full_counts %>%
+  filter(Classification == 1) %>%
+  summarise(sum(ycount))
+
+##Trump Tweets
+##ethnic count
+full_trump %>%
+  filter(Classification == -1) %>%
+  summarise(sum(ycount))
+##civic count
+full_trump %>%
+  filter(Classification == 1) %>%
+  summarise(sum(ycount))
+```
+
+
+
+
+
+
+
